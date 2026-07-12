@@ -1,7 +1,19 @@
 # PR Response Doc — CineLog Watchlist Feature
 
 ## AI Usage
-<!-- Fill in at the end — how you used AI tools during this project -->
+I used Claude Code (Claude, Anthropic) throughout this project, in an agentic capacity — reading files, running `pytest`, running `git`, and making edits directly, with me reviewing and directing at each step rather than pasting code from a chat window.
+
+- **Orientation:** Before touching any review comments, I had it read `models.py`, `services/collection_service.py`, `tests/test_collection.py`, `routes/collection.py`, `routes/films.py`, `app.py`, `README.md`, and `CONTRIBUTING.md` in full, to establish the `verb_to_noun` naming convention, the exception + status-code pattern (`FooNotFoundError` → 404, `AlreadyInFooError` → 409), and the test fixture structure, before looking at a single review comment.
+- **Locating the review:** The six review comments live on the upstream template repo's PR (not copied to my fork), so I used the GitHub API (`gh`/`curl` against `api.github.com`) to pull the PR's inline review comments and conversation comments directly, rather than guessing at what the comments said.
+- **Mechanical work:** Renaming call sites, mirroring existing patterns (`AlreadyInWatchlistError`, `NotInWatchlistError`, the `remove_from_watchlist()` route), and writing/running the test suite were all done by the agent, with me confirming test results after each step.
+- **Verification, not just implementation:** While writing the sort-order test for Comment 5, the agent caught a real latent bug — `WatchlistEntry` had no `film` relationship declared on `Film`, so `get_watchlist()` would have thrown `AttributeError` the first time it was ever called with real data, and no existing test exercised that path. That's documented as its own commit and in Comment 5's response.
+- **What I did not delegate:** The actual reasoning for Comments 4 and 5 — whether watchlists should default to private, and whether "newest first" is the right call over alphabetical — are my own judgment calls about CineLog's specific product context (the collection/watchlist distinction, what "community" means for this app), not generic AI-generated arguments.
+- **Stress-testing the drafts (Comments 4 & 5):** After writing first drafts of both responses, I asked a fresh instance (no memory of writing the drafts) to act as a skeptical reviewer and find real flaws — not to write or fix the arguments, just to attack them. Prompt was roughly: "attack these two responses for concrete, unacknowledged flaws; don't propose fixes; skip anything pedantic." It surfaced three things I changed as a result, and the versions of Comments 4 and 5 in this doc already reflect the fix, not the original draft:
+  1. **My first Comment 5 draft claimed the `/films/` catalog endpoint serves users who want alphabetical order.** That's false — `list_films()` in `routes/films.py` has no `user_id` filter, it returns the whole catalog, not one user's watchlist. I reread the file, confirmed it, and rewrote the response to admit that gap instead of hand-waving past it.
+  2. **Comment 4 changed a default when the reviewer only asked for documentation.** The reviewer's actual comment asked for a documented rationale before approval, not necessarily a different value. I added a paragraph explaining why I made a code change instead of just writing up a justification for the inherited `True` default.
+  3. **My Comment 4 tradeoff paragraph originally undercut its own position** by stating "most watchlists will likely stay private forever" as a plain fact without acknowledging that this is itself evidence against the choice I made. I rewrote it to name that tension directly instead of asserting past it.
+  I did not change Comment 4's core "intent vs. accomplishment" analogy — the reviewer correctly noted it's asserted rather than proven, but I judged that as an inherent limit of any design argument made without user data, not a fixable gap, so I added a sentence owning that limitation explicitly rather than pretending the analogy is airtight.
+- **Verifying commit format (Milestone 4):** Before finalizing history, I gave a fresh agent the full list of commits (subject, body, files changed) and asked it to check conventional-commit compliance and flag any commit bundling unrelated logical changes, per the Conventional Commits spec. It found two real issues I fixed: (1) `fix: default watchlist entries to private` was mistyped — introducing a brand-new default is a `feat:`, not a `fix:`, since nothing was broken beforehand; retyped it. (2) my first attempt at splitting the rename commit still bundled +46 unrelated lines of `pr-response.md` scaffolding into a 4-line rename — I split that into its own `docs: scaffold pr-response.md` commit. While fixing that, I also found and fixed a structural problem the audit didn't catch: an earlier version of this history had `WatchlistEntry` referenced by several commits before the commit that (re)introduced it to `models.py` after rebasing onto `main` (which had deleted the class as part of the UUID migration), meaning `pytest` would fail with an `ImportError` if someone checked out one of those intermediate commits. I rebuilt the commit sequence so the model is created in the same commit as the first code that depends on it.
 
 ## Comment 1 — Rename
 **What I did:** Renamed `save_to_watchlist()` to `add_to_watchlist()` in `services/watchlist_service.py` and updated the one call site in `routes/watchlist/watchlist.py` (`add_film`). This matches the `verb_to_noun` convention documented in `CONTRIBUTING.md` and already used by `add_to_collection()` / `remove_from_collection()` / `get_collection()` in `services/collection_service.py`.
@@ -59,3 +71,89 @@ I also found a real bug while writing the test for this: `WatchlistEntry` had no
 
 ## PR Description
 <!-- Written at the end — feature overview, design decisions, manual testing steps -->
+
+### What this feature does
+
+Adds a watchlist to CineLog — a list of films a user wants to watch, distinct from their `Collection` (films they've already watched and rated). Users can add a film to their watchlist, view it (sorted newest-added-first), and remove a film from it. Each entry has a `public` flag controlling whether it's visible to others.
+
+**Endpoints:**
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/watchlist/<user_id>` | Get a user's watchlist (newest first) |
+| POST | `/watchlist/<user_id>/add` | Add a film to the watchlist (`{"film_id": "<uuid>", "public": false}` — `public` optional) |
+| DELETE | `/watchlist/<user_id>/remove` | Remove a film from the watchlist (`{"film_id": "<uuid>"}`) |
+
+### Design decisions
+
+- **Naming:** `add_to_watchlist()` / `remove_from_watchlist()` / `get_watchlist()`, matching the `verb_to_noun` convention already used by the collection service (Comment 1).
+- **Deduplication:** Adding a film already on the watchlist raises `AlreadyInWatchlistError` (409), matching `AlreadyInCollectionError`'s pattern, instead of silently creating a duplicate row (Comment 2).
+- **Default visibility:** Watchlist entries default to `public=False` (private). A watchlist reveals intent ("what I want to watch") rather than a completed action, which is more sensitive than a `CollectionEntry` (which has no visibility field at all — collections are always public). See Comment 4 in this doc for the full reasoning and the acknowledged discoverability tradeoff. Callers can opt a specific entry into being public via the new `public` parameter (stretch feature).
+- **Sort order:** `get_watchlist()` returns entries newest-added-first (`date_added.desc()`), matching `get_collection()`'s convention, rather than alphabetically by title. See Comment 5 for the full reasoning, including why the `/films/` catalog endpoint does not actually cover the alphabetical-browsing use case.
+- **UUIDs:** Rebased onto `main`'s integer→UUID film ID migration; `WatchlistEntry.film_id` is `db.String(36)` like `CollectionEntry.film_id`. See Comment 6.
+
+### Manual testing steps
+
+```bash
+python -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+python app.py   # starts on http://127.0.0.1:5000
+```
+
+Seed a user and a film (there's no seed script, so do it via a Python shell, or use IDs already in `cinelog.db` if you've used the app before):
+
+```python
+from app import create_app, db
+from models import User, Film
+app = create_app()
+with app.app_context():
+    u = User(username="demo", email="demo@example.com")
+    f = Film(title="Paddington 2", year=2017, genre="Comedy")
+    db.session.add_all([u, f])
+    db.session.commit()
+    print(u.id, f.id)
+```
+
+Then, with `USER_ID` and `FILM_ID` from that output:
+
+```bash
+# Empty watchlist
+curl http://127.0.0.1:5000/watchlist/$USER_ID
+
+# Add a film (private by default)
+curl -X POST http://127.0.0.1:5000/watchlist/$USER_ID/add \
+  -H "Content-Type: application/json" \
+  -d "{\"film_id\": \"$FILM_ID\"}"
+
+# Adding again should 409
+curl -X POST http://127.0.0.1:5000/watchlist/$USER_ID/add \
+  -H "Content-Type: application/json" \
+  -d "{\"film_id\": \"$FILM_ID\"}"
+
+# List should show 1 entry with "public": false
+curl http://127.0.0.1:5000/watchlist/$USER_ID
+
+# Remove it
+curl -X DELETE http://127.0.0.1:5000/watchlist/$USER_ID/remove \
+  -H "Content-Type: application/json" \
+  -d "{\"film_id\": \"$FILM_ID\"}"
+
+# Removing again should 404
+curl -X DELETE http://127.0.0.1:5000/watchlist/$USER_ID/remove \
+  -H "Content-Type: application/json" \
+  -d "{\"film_id\": \"$FILM_ID\"}"
+
+# Add again with public=true
+curl -X POST http://127.0.0.1:5000/watchlist/$USER_ID/add \
+  -H "Content-Type: application/json" \
+  -d "{\"film_id\": \"$FILM_ID\", \"public\": true}"
+
+# Adding a nonexistent film_id should 404
+curl -X POST http://127.0.0.1:5000/watchlist/$USER_ID/add \
+  -H "Content-Type: application/json" \
+  -d "{\"film_id\": \"00000000-0000-0000-0000-000000000000\"}"
+```
+
+Note: in this sandbox, plain `python app.py` (Werkzeug's debug reloader) throws an unrelated `RuntimeError` that also reproduces on an untouched `main` checkout hitting `/films/` — it's a pre-existing environment quirk, not caused by this branch. If you hit it, run the app with `debug=False` instead (e.g. `app.run(debug=False)` in a small script, or `flask run` without `--debug`).
+
+Automated coverage: `pytest tests/` (13 tests: 4 pre-existing collection tests + 9 watchlist tests covering happy path, deduplication, nonexistent film, sort order, user isolation, remove, and visibility default/override).
