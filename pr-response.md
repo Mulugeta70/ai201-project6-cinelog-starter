@@ -50,8 +50,8 @@ I also found a real bug while writing the test for this: `WatchlistEntry` had no
 **How I verified:** Added `test_remove_from_watchlist_deletes_entry` (add then remove, assert the row is gone) and `test_remove_from_watchlist_not_present_raises` (remove something never added, assert `NotInWatchlistError`) to `tests/test_watchlist.py`. `pytest tests/` passes all 10 tests.
 
 ## Stretch — Additional test
-**What I chose:**
-**Why:**
+**What I chose:** `test_get_watchlist_only_returns_current_users_entries` — creates two users, adds a film to only user A's watchlist, and asserts `get_watchlist(user_a.id)` returns it while `get_watchlist(user_b.id)` returns an empty list.
+**Why:** None of the review comments or existing tests actually verify that `get_watchlist()` is scoped correctly per user — every existing test only ever uses a single `sample_user`, so a regression that dropped or broke the `filter_by(user_id=user_id)` clause (e.g. during a future refactor of the sort-order query, which I had just changed for Comment 5) would have shipped silently and leaked one user's watchlist into another's. Cross-user data leakage is exactly the kind of bug that's cheap to catch with a two-user test and expensive to catch any other way, so it seemed like the highest-value edge case to add.
 
 ## Stretch — Visibility toggle
 **What I did:**

@@ -134,6 +134,25 @@ def test_remove_from_watchlist_not_present_raises(app, sample_user, sample_film)
             remove_from_watchlist(user_id=sample_user, film_id=sample_film)
 
 
+# ── User isolation ───────────────────────────────────────────────────────────
+
+def test_get_watchlist_only_returns_current_users_entries(app, sample_film):
+    """
+    get_watchlist() must not leak another user's entries. Regression guard
+    for the filter_by(user_id=...) clause in the query.
+    """
+    with app.app_context():
+        user_a = User(username="user_a", email="a@example.com")
+        user_b = User(username="user_b", email="b@example.com")
+        db.session.add_all([user_a, user_b])
+        db.session.commit()
+
+        add_to_watchlist(user_id=user_a.id, film_id=sample_film)
+
+        assert len(get_watchlist(user_a.id)) == 1
+        assert get_watchlist(user_b.id) == []
+
+
 # ── get_watchlist sort order ─────────────────────────────────────────────────
 
 def test_get_watchlist_returns_newest_first(app, sample_user):
