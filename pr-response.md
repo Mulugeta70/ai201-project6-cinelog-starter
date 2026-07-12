@@ -46,8 +46,8 @@ I also found a real bug while writing the test for this: `WatchlistEntry` had no
 **How I verified no conflict remains:** `git status` showed a clean rebase (`Successfully rebased and updated refs/heads/feature/watchlist`), `git log --graph` showed a fully linear history with no merge commits, and `pytest tests/` passed with the post-rebase UUID schema (the fake-nonexistent-film-id test already used a UUID-shaped string, so it didn't need changes).
 
 ## Stretch — remove_from_watchlist()
-**What I did:**
-**How I verified:**
+**What I did:** Added `remove_from_watchlist(user_id, film_id)` to `services/watchlist_service.py`, directly mirroring `remove_from_collection()`: look up the entry by `(user_id, film_id)`, raise a new `NotInWatchlistError` if it isn't found, otherwise delete and commit, returning `True`. Also added a `DELETE /watchlist/<user_id>/remove` endpoint in `routes/watchlist/watchlist.py`, matching `routes/collection.py`'s `remove_film` — same body shape (`{"film_id": "<uuid>"}`), same 404 status for the not-found case, same success message shape.
+**How I verified:** Added `test_remove_from_watchlist_deletes_entry` (add then remove, assert the row is gone) and `test_remove_from_watchlist_not_present_raises` (remove something never added, assert `NotInWatchlistError`) to `tests/test_watchlist.py`. `pytest tests/` passes all 10 tests.
 
 ## Stretch — Additional test
 **What I chose:**
