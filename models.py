@@ -80,7 +80,11 @@ class WatchlistEntry(db.Model):
     user_id = db.Column(db.String(36), db.ForeignKey("user.id"), nullable=False)
     film_id = db.Column(db.String(36), db.ForeignKey("film.id"), nullable=False)
     date_added = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
-    public = db.Column(db.Boolean, default=True)
+    # Defaults to private. See pr-response.md (Comment 4) for the reasoning:
+    # a watchlist reveals intent ("what I want to watch"), which is more
+    # sensitive than a collection's record of what a user has already
+    # watched, so it shouldn't be public unless a user opts in.
+    public = db.Column(db.Boolean, default=False)
 
     def to_dict(self):
         return {
