@@ -26,9 +26,12 @@
 **Engagement with reviewer's point:**
 
 ## Comment 6 — Rebase
-**What conflicted:**
-**How I resolved it:**
-**How I verified no conflict remains:**
+**What conflicted:** Ran `git fetch origin` then `git rebase origin/main` on `feature/watchlist`. Two conflicts came up:
+1. `.gitignore` — an "add/add" conflict, since `main` had already merged its own `.gitignore` (from a separate `chore/add-gitignore` PR) while my branch added its own. The two files were nearly identical; main's version additionally ignored `.pytest_cache/`.
+2. `models.py` — a real content conflict on the `refactor: migrate film IDs from integer to UUID` commit. `main` changed `Film.id` from `db.Column(db.Integer, ...)` to `db.Column(db.String(36), default=generate_uuid)` and updated `CollectionEntry.film_id` to match, but it has no knowledge of `WatchlistEntry` (that model only exists on `feature/watchlist`), so git couldn't auto-merge the two additions to the end of the file.
+
+**How I resolved it:** For `.gitignore`, I kept the superset of both lists (added `.pytest_cache/` to mine) — after that my `.gitignore` commit became empty relative to main's, and git auto-dropped it during the rebase. For `models.py`, I kept the `WatchlistEntry` class from my branch and changed `film_id` from `db.Column(db.Integer, db.ForeignKey("film.id"), ...)` to `db.Column(db.String(36), db.ForeignKey("film.id"), ...)`, matching the same type main used for `CollectionEntry.film_id`. I also went through `services/watchlist_service.py` and `routes/watchlist/watchlist.py` and updated the docstrings/comments that still described `film_id` as an integer, and the endpoint's example request body, so nothing in the code contradicts the UUID schema.
+**How I verified no conflict remains:** `git status` showed a clean rebase (`Successfully rebased and updated refs/heads/feature/watchlist`), `git log --graph` showed a fully linear history with no merge commits, and `pytest tests/` passed with the post-rebase UUID schema (the fake-nonexistent-film-id test already used a UUID-shaped string, so it didn't need changes).
 
 ## Stretch — remove_from_watchlist()
 **What I did:**

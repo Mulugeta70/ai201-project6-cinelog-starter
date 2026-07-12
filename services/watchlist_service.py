@@ -1,7 +1,7 @@
 """
-services/watchlist_service.py — CineLog (feature/watchlist branch)
+services/watchlist_service.py — CineLog
 
-Business logic for the watchlist feature.
+Business logic for the watchlist feature. Film IDs are UUIDs throughout.
 """
 
 from app import db
@@ -20,7 +20,7 @@ def add_to_watchlist(user_id, film_id):
 
     Args:
         user_id (str): UUID of the user.
-        film_id (int): ID of the film. (Note: integer — pre-refactor)
+        film_id (str): UUID of the film.
 
     Returns:
         WatchlistEntry: The newly created entry.
