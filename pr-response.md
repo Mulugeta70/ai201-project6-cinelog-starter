@@ -59,7 +59,7 @@ I also found a real bug while writing the test for this: `WatchlistEntry` had no
 
 ## Commit History
 
-Final history on `feature/watchlist` relative to `main` — 14 commits, all conventional format, no merge commits:
+Final history on `feature/watchlist` relative to `main` — 15 commits, all conventional format, no merge commits (the screenshot below was taken before the commit that added it, so it shows the first 14; the 15th, adding this screenshot, is `docs: add commit history screenshot to pr-response.md`):
 
 ![git log --oneline output showing 14 conventional commits and no merge commits](docs/git-log-screenshot.png)
 
