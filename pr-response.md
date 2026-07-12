@@ -4,8 +4,8 @@
 <!-- Fill in at the end — how you used AI tools during this project -->
 
 ## Comment 1 — Rename
-**What I did:**
-**How I verified:**
+**What I did:** Renamed `save_to_watchlist()` to `add_to_watchlist()` in `services/watchlist_service.py` and updated the one call site in `routes/watchlist/watchlist.py` (`add_film`). This matches the `verb_to_noun` convention documented in `CONTRIBUTING.md` and already used by `add_to_collection()` / `remove_from_collection()` / `get_collection()` in `services/collection_service.py`.
+**How I verified:** Grepped the whole repo for `save_to_watchlist` to confirm no call sites were missed, then ran `pytest tests/` to confirm the app still imports and runs cleanly.
 
 ## Comment 2 — Deduplication
 **What I did:**
